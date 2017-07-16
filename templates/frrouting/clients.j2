@@ -1,0 +1,63 @@
+# ---------------------------------------------------------
+# MEMBERS
+#neighbor 10.10.0.119 remote-as 1119
+#neighbor 10.10.0.119 advertisement-interval 1
+#neighbor 10.10.0.119 route-server-client
+#neighbor 10.10.0.119 timers 30 90
+
+
+{{ "pre-clients"|include_local_file -}}
+
+{% for client in clients if client.ip is current_ipver %}
+
+neighbor {{ client.ip }}
+
+{%	if client.description %}
+neighbor	description "{{ client.description|truncate(31) }}"
+{%	endif %}
+
+neighbor {{ client.ip }} remote-as {{ client.asn }}
+neighbor {{ client.ip }} advertisement-interval 1
+neighbor {{ client.ip }} route-server-client
+neighbor {{ client.ip }} timers 30 90
+
+{%	if client.cfg.passive %}
+neighbor {{ client.ip }} passive
+{%	endif %}
+{%	if client.password %}
+neighbor	{{ client.ip }} password "{{ client.password }}"
+{%	endif %}
+{%	if client.cfg.gtsm %}
+neighbor	{{ client.ip }} ttl-security hops 1
+{%	else %}
+no neighbor	{{ client.ip }} ttl-security
+{%	endif %}
+
+{%	if client.cfg.filtering.max_prefix.action == "restart" or
+				client.cfg.filtering.max_prefix.action == "warning"%}
+{%      	if client.ip|ipaddr_ver == 4 and client.cfg.filtering.max_prefix.limit_ipv4 %}
+{%              	set max_pref_limit = client.cfg.filtering.max_prefix.limit_ipv4 %}
+{%      	elif client.ip|ipaddr_ver == 6 and client.cfg.filtering.max_prefix.limit_ipv6 %}
+{%              	set max_pref_limit = client.cfg.filtering.max_prefix.limit_ipv6 %}
+{%      	else %}
+{%              	set max_pref_limit = 0 %}
+{%      	endif %}
+{%      	if max_pref_limit > 0 %}
+{%			if client.cfg.filtering.max_prefix.action == "restart" %}
+neighbor	{{ client.ip }} maximum-prefix {{ max_pref_limit }} restart {{ client.cfg.filtering.max_prefix.restart_after }}
+{%			else %}
+neighbor	{{ client.ip }} maximum-prefix {{ max_pref_limit }} warn-only
+{%			endif %}
+{%		endif %}
+{%	endif %}
+
+{%	if client.cfg.prepend_rs_as %}
+neighbor	{{ client.ip }} local-as {{ cfg.rs_as }}
+{%	else %}
+neighbor	{{ client.ip }} local-as {{ cfg.rs_as }} no-prepend
+{%	endif %}
+
+
+{% endfor %}
+
+{{ "post-clients"|include_local_file -}}
